@@ -141,22 +141,23 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
 
 @app.post("/predict/")
 async def predict_weather(item: weatherItem):
-    predictions = predict_3_days_after(
-        loaded_model,
-        item.Humidity,
-        item.AirPressure,
-        item.Temperature,
-        item.Year,
-        item.Month,
-        item.Day,
-        item.hour
-    )
-    formatted_predictions = [
-        "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
-            pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
-        ) for pred in predictions]
+    try:
+        predictions = predict_3_days_after(
+            loaded_model,
+            item.Humidity,
+            item.AirPressure,
+            item.Temperature,
+            item.Year,
+            item.Month,
+            item.Day,
+            item.hour
+        )
+        formatted_predictions = [
+            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
+                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
+            ) for pred in predictions]
     
-    return {'predictions': formatted_predictions}
+        return {'predictions': formatted_predictions}
     except Exception as e:
         logger.error(f"Prediction error: {e}")
         raise HTTPException(status_code=500, detail=f"Prediction error:{e}")
