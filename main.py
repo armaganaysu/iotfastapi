@@ -33,8 +33,7 @@ except Exception as e:
     logger.error(f"Error loading model: {e}")
     raise HTTPException(status_code=500, detail="Model loading error")
 
-# Define the data model
-class WeatherData(BaseModel):
+class weatherItem(BaseModel):
     Humidity: float
     AirPressure: float
     Temperature: float
