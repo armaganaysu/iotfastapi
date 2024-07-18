@@ -33,7 +33,8 @@ except Exception as e:
     logger.error(f"Error loading model: {e}")
     raise HTTPException(status_code=500, detail="Model loading error")
 
-class weatherItem(BaseModel):
+# Define the data model
+class WeatherData(BaseModel):
     Humidity: float
     AirPressure: float
     Temperature: float
@@ -89,76 +90,19 @@ def postprocess_p(pred):
 def postprocess_h(pred):
     return pred * h_training_std4 + h_training_mean4
 
-
-def predict_3_days_after(model, humidity, airpressure, temperature, year, month, day, hour):
-    predictions = []
-    base_seconds = calculate_seconds(year, month, day, hour)
-    
-    day_sin, day_cos, year_sin, year_cos = calculate_sin_cos(base_seconds)
-    input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
-    
-    # Duplicate the same features 8 times to form a sequence
-    sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
-
-    for i in range(3):
-        # Predict using the model
-        pred = model.predict(sequence)
-
-        # Postprocess predictions
-        pred_humidity = postprocess_h(pred[0, 0])
-        pred_airpressure = postprocess_p(pred[0, 1])
-        pred_temperature = postprocess_temp(pred[0, 2])
-
-        print(humidity)
-        print(airpressure)
-        print(temperature)
-
-        if(abs(pred_temperature - temperature) > 6):
-            pred_temperature = temperature * random.uniform(0.92, 1.06)
-        if(abs(pred_airpressure - airpressure) > 5):
-            pred_airpressure = airpressure * random.uniform(0.92, 1.06)       
-        if(abs(pred_humidity - humidity) > 12):
-            pred_humidity = humidity * random.uniform(0.92, 1.06)    
-        
-        # Collect predictions
-        predictions.append({
-            'day': day + i + 1,
-            'predicted_humidity': pred_humidity,
-            'predicted_airpressure': pred_airpressure,
-            'predicted_temperature': pred_temperature
-        })
-
-        # Update input values for the next prediction
-        humidity, airpressure, temperature = pred_humidity, pred_airpressure, pred_temperature
-
-        # Update sequence with the new predicted values
-        input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
-        sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
-
-    return predictions
-
-
 @app.post("/predict/")
-async def predict_weather(item: weatherItem):
+async def predict(weather_data: WeatherData):
+    logger.info(f"Received data: {weather_data}")
     try:
-        predictions = predict_3_days_after(
-            loaded_model,
-            item.Humidity,
-            item.AirPressure,
-            item.Temperature,
-            item.Year,
-            item.Month,
-            item.Day,
-            item.hour
-        )
-        formatted_predictions = [
-            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
-                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
-            ) for pred in predictions]
-    
-        return {'predictions': formatted_predictions}
+        input_data = preprocess_input(weather_data)
+        prediction = loaded_model.predict(input_data)
+        return {
+            "prediction": {
+                "temperature": postprocess_temp(prediction[0][0]),
+                "air_pressure": postprocess_p(prediction[0][1]),
+                "humidity": postprocess_h(prediction[0][2])
+            }
+        }
     except Exception as e:
         logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction error:{e}")
-
-
+        raise HTTPException(status_code=500, detail=f"Prediction error {e}")
