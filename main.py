@@ -62,24 +62,20 @@ def calculate_sin_cos(seconds):
     year_cos = np.cos(2 * np.pi * (seconds % year_in_seconds) / year_in_seconds)
     return day_sin, day_cos, year_sin, year_cos
 
-def preprocess_input(data):
+def preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos):
     try:
-        # Calculate the seconds and sinusoidal features
-        ts = pd.Timestamp(year=data.Year, month=data.Month, day=data.Day, hour=data.hour)
-        seconds = ts.timestamp()
-        day_sin, day_cos, year_sin, year_cos = calculate_sin_cos(seconds)
-
         # Normalize input data
         normalized_data = [
-            (data.Temperature - temp_training_mean4) / temp_training_std4,
-            (data.AirPressure - p_training_mean4) / p_training_std4,
-            (data.Humidity - h_training_mean4) / h_training_std4,
+            (temperature - temp_training_mean4) / temp_training_std4,
+            (airpressure - p_training_mean4) / p_training_std4,
+            (humidity - h_training_mean4) / h_training_std4,
             day_sin, day_cos, year_sin, year_cos
         ]
         return np.array([normalized_data])
     except Exception as e:
         logger.error(f"Error in preprocessing: {e}")
         raise HTTPException(status_code=500, detail="Preprocessing error")
+
 
 def postprocess_temp(pred):
     return pred * temp_training_std4 + temp_training_mean4
@@ -99,13 +95,13 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
     predictions = []
     base_seconds = calculate_seconds(year, month, day, hour)
     
-    day_sin, day_cos, year_sin, year_cos = calculate_sin_cos(base_seconds)
-    input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
-    
-    # Duplicate the same features 8 times to form a sequence
-    sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
-
     for i in range(3):
+        day_sin, day_cos, year_sin, year_cos = calculate_sin_cos(base_seconds + i * 24 * 60 * 60)
+        input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
+        
+        # Duplicate the same features 8 times to form a sequence
+        sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
+
         # Predict using the model
         pred = model.predict(sequence)
 
@@ -131,11 +127,8 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
         # Update input values for the next prediction
         humidity, airpressure, temperature = pred_humidity, pred_airpressure, pred_temperature
 
-        # Update sequence with the new predicted values
-        input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
-        sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
-
     return predictions
+
 
 
 @app.post("/predict/")
