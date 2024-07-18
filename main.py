@@ -1,6 +1,6 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 import io
 import pickle
@@ -109,10 +109,9 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
         # Predict using the model
         pred = model.predict(sequence)
 
-
-        print(humidity)
-        print(airpressure)
-        print(temperature)
+        pred_temperature = postprocess_temp(pred[0][0])
+        pred_airpressure = postprocess_p(pred[0][1])
+        pred_humidity = postprocess_h(pred[0][2])
 
         if(abs(pred_temperature - temperature) > 6):
             pred_temperature = temperature * random.uniform(0.92, 1.06)
