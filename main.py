@@ -34,7 +34,7 @@ except Exception as e:
     raise HTTPException(status_code=500, detail="Model loading error")
 
 # Define the data model
-class WeatherData(BaseModel):
+class weatherItem(BaseModel):
     Humidity: float
     AirPressure: float
     Temperature: float
@@ -54,37 +54,41 @@ h_training_mean4=8.482944805555556
 h_training_std4=34.169496459076676
 
 def calculate_sin_cos(seconds):
-    day_in_seconds = 24 * 60 * 60
-    year_in_seconds = 365.25 * day_in_seconds
-    day_sin = np.sin(2 * np.pi * (seconds % day_in_seconds) / day_in_seconds)
-    day_cos = np.cos(2 * np.pi * (seconds % day_in_seconds) / day_in_seconds)
-    year_sin = np.sin(2 * np.pi * (seconds % year_in_seconds) / year_in_seconds)
-    year_cos = np.cos(2 * np.pi * (seconds % year_in_seconds) / year_in_seconds)
+    day = 60 * 60 * 24
+    year = 365.2425 * day
+
+    day_sin = np.sin(seconds * (2 * np.pi / day))
+    day_cos = np.cos(seconds * (2 * np.pi / day))
+    year_sin = np.sin(seconds * (2 * np.pi / year))
+    year_cos = np.cos(seconds * (2 * np.pi / year))
+
     return day_sin, day_cos, year_sin, year_cos
+
+def calculate_seconds(year, month, day, hour):
+    ts = pd.Timestamp(year=year, month=month, day=day, hour=hour)
+    seconds = ts.timestamp()
+    return seconds
 
 def preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos):
     try:
-        # Normalize input data
-        normalized_data = [
-            (temperature - temp_training_mean4) / temp_training_std4,
-            (airpressure - p_training_mean4) / p_training_std4,
-            (humidity - h_training_mean4) / h_training_std4,
-            day_sin, day_cos, year_sin, year_cos
-        ]
-        return np.array([normalized_data])
+        input_features = np.array([humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos])
+        input_features[0] = (input_features[0] - h_training_mean4) / h_training_std4
+        input_features[1] = (input_features[1] - p_training_mean4) / p_training_std4
+        input_features[2] = (input_features[2] - temp_training_mean4) / temp_training_std4
+        return input_features
     except Exception as e:
         logger.error(f"Error in preprocessing: {e}")
         raise HTTPException(status_code=500, detail="Preprocessing error")
 
 
-def postprocess_temp(pred):
-    return pred * temp_training_std4 + temp_training_mean4
+def postprocess_temp(arr):
+    return (arr * temp_training_std4) + temp_training_mean4
 
-def postprocess_p(pred):
-    return pred * p_training_std4 + p_training_mean4
+def postprocess_p(arr):
+    return (arr * p_training_std4) + p_training_mean4
 
-def postprocess_h(pred):
-    return pred * h_training_std4 + h_training_mean4
+def postprocess_h(arr):
+    return (arr * h_training_std4) + h_training_mean4
 
 def calculate_seconds(year, month, day, hour):
     ts = pd.Timestamp(year=year, month=month, day=day, hour=hour)
@@ -95,20 +99,20 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
     predictions = []
     base_seconds = calculate_seconds(year, month, day, hour)
     
-    for i in range(3):
-        day_sin, day_cos, year_sin, year_cos = calculate_sin_cos(base_seconds + i * 24 * 60 * 60)
-        input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
-        
-        # Duplicate the same features 8 times to form a sequence
-        sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
+    day_sin, day_cos, year_sin, year_cos = calculate_sin_cos(base_seconds)
+    input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
+    
+    # Duplicate the same features 8 times to form a sequence
+    sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
 
+    for i in range(3):
         # Predict using the model
         pred = model.predict(sequence)
 
-        # Postprocess predictions
-        pred_humidity = postprocess_h(pred[0, 0])
-        pred_airpressure = postprocess_p(pred[0, 1])
-        pred_temperature = postprocess_temp(pred[0, 2])
+
+        print(humidity)
+        print(airpressure)
+        print(temperature)
 
         if(abs(pred_temperature - temperature) > 6):
             pred_temperature = temperature * random.uniform(0.92, 1.06)
@@ -116,6 +120,10 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
             pred_airpressure = airpressure * random.uniform(0.92, 1.06)       
         if(abs(pred_humidity - humidity) > 12):
             pred_humidity = humidity * random.uniform(0.92, 1.06)    
+
+
+
+
         # Collect predictions
         predictions.append({
             'day': day + i + 1,
@@ -127,12 +135,16 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
         # Update input values for the next prediction
         humidity, airpressure, temperature = pred_humidity, pred_airpressure, pred_temperature
 
+        # Update sequence with the new predicted values
+        input_features = preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_sin, year_cos)
+        sequence = np.tile(input_features, (8, 1)).reshape((1, 8, 7))
+
     return predictions
 
 
 
 @app.post("/predict/")
-async def predict(item: WeatherData):
+async def predict(item: weatherItem):
     logger.info(f"Data has been received")
     try:
         predictions = predict_3_days_after(
