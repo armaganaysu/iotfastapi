@@ -6,3 +6,4 @@ tensorflow==2.15.0
 numpy==1.26.2
 pandas==2.2.2
 pyTelegramBotAPI
+python-telegram-bot
