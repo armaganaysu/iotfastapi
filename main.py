@@ -2,6 +2,10 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
+import telebot
+import joblib
+
+
 import io
 import pickle
 import random
@@ -11,8 +15,11 @@ from pydantic import BaseModel
 from tensorflow.keras.models import model_from_json
 import pandas as pd
 import logging
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+
+API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
+bot = telebot.TeleBot(API_TOKEN)
+
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -45,14 +52,15 @@ class weatherItem(BaseModel):
     Day: int
     hour: int
 
-temp_training_mean4 = 17.527442944444445
-temp_training_std4 = 8.223213560661346
 
-p_training_mean4 = 99.9095251111111
-p_training_std4 = 0.5779492889446739
+temp_training_mean4 =17.527442944444445
+temp_training_std4 =8.223213560661346
 
-h_training_mean4 = 8.482944805555556
-h_training_std4 = 34.169496459076676
+p_training_mean4=99.9095251111111
+p_training_std4=0.5779492889446739
+
+h_training_mean4=8.482944805555556
+h_training_std4=34.169496459076676
 
 def calculate_sin_cos(seconds):
     day = 60 * 60 * 24
@@ -81,6 +89,7 @@ def preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_
         logger.error(f"Error in preprocessing: {e}")
         raise HTTPException(status_code=500, detail="Preprocessing error")
 
+
 def postprocess_temp(arr):
     return (arr * temp_training_std4) + temp_training_mean4
 
@@ -89,6 +98,11 @@ def postprocess_p(arr):
 
 def postprocess_h(arr):
     return (arr * h_training_std4) + h_training_mean4
+
+def calculate_seconds(year, month, day, hour):
+    ts = pd.Timestamp(year=year, month=month, day=day, hour=hour)
+    seconds = ts.timestamp()
+    return seconds
 
 def predict_3_days_after(model, humidity, airpressure, temperature, year, month, day, hour):
     predictions = []
@@ -108,12 +122,15 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
         pred_airpressure = postprocess_p(pred[0][1])
         pred_humidity = postprocess_h(pred[0][2])
 
-        if abs(pred_temperature - temperature) > 6:
+        if(abs(pred_temperature - temperature) > 6):
             pred_temperature = temperature * random.uniform(0.92, 1.06)
-        if abs(pred_airpressure - airpressure) > 5:
+        if(abs(pred_airpressure - airpressure) > 5):
             pred_airpressure = airpressure * random.uniform(0.92, 1.06)       
-        if abs(pred_humidity - humidity) > 12:
+        if(abs(pred_humidity - humidity) > 12):
             pred_humidity = humidity * random.uniform(0.92, 1.06)    
+
+
+
 
         # Collect predictions
         predictions.append({
@@ -132,69 +149,30 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
 
     return predictions
 
+
+
 @app.post("/predict/")
 async def predict(item: weatherItem):
     logger.info(f"Data has been received")
     try:
         predictions = predict_3_days_after(
-            loaded_model,
-            item.Humidity,
-            item.AirPressure,
-            item.Temperature,
-            item.Year,
-            item.Month,
-            item.Day,
-            item.hour)
+        loaded_model,
+        item.Humidity,
+        item.AirPressure,
+        item.Temperature,
+        item.Year,
+        item.Month,
+        item.Day,
+        item.hour)
         
         formatted_predictions = [
-            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
-                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
-            ) for pred in predictions]
-
+        "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
+            pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
+        ) for pred in predictions]
+        
+        bot.send_message(chat_id=1390900484, text=formatted_predictions)
+        
         return {'predictions': formatted_predictions}
     except Exception as e:
         logger.error(f"Prediction error: {e}")
         raise HTTPException(status_code=500, detail=f"Prediction error {e}")
-
-# Telegram bot setup
-TELEGRAM_TOKEN = '7330087431:AAF7VImTMerVbrsAY89Q6SIhlQyto81NBxM'
-
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text('Hello! Send me weather data in the format: Humidity, AirPressure, Temperature, Year, Month, Day, Hour')
-
-def handle_message(update: Update, context: CallbackContext):
-    try:
-        text = update.message.text
-        data = text.split(',')
-        if len(data) != 7:
-            update.message.reply_text('Invalid format. Please send data in the format: Humidity, AirPressure, Temperature, Year, Month, Day, Hour')
-            return
-        
-        humidity, airpressure, temperature = float(data[0]), float(data[1]), float(data[2])
-        year, month, day, hour = int(data[3]), int(data[4]), int(data[5]), int(data[6])
-
-        item = weatherItem(Humidity=humidity, AirPressure=airpressure, Temperature=temperature, Year=year, Month=month, Day=day, hour=hour)
-        predictions = predict_3_days_after(loaded_model, item.Humidity, item.AirPressure, item.Temperature, item.Year, item.Month, item.Day, item.hour)
-        
-        formatted_predictions = [
-            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
-                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
-            ) for pred in predictions]
-        
-        update.message.reply_text('\n'.join(formatted_predictions))
-    except Exception as e:
-        logger.error(f"Error handling message: {e}")
-        update.message.reply_text(f"Error: {e}")
-
-def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == "__main__":
-    main()
