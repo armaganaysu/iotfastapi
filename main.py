@@ -13,8 +13,9 @@ from pydantic import BaseModel
 from tensorflow.keras.models import model_from_json
 import pandas as pd
 import logging
-
-API_TOKEN = TELEGRAM_API
+from decouple import config
+API_TOKEN = config(TELEGRAM_API)
+CHAT_ID = config(CHAT_ID)
 bot = telebot.TeleBot(API_TOKEN)
 
 
