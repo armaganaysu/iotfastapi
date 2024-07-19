@@ -3,6 +3,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 import telebot
+
+
 import io
 import pickle
 import random
@@ -12,11 +14,11 @@ from pydantic import BaseModel
 from tensorflow.keras.models import model_from_json
 import pandas as pd
 import logging
-import requests
-from datetime import datetime
 
 API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
 bot = telebot.TeleBot(API_TOKEN)
+
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -40,19 +42,24 @@ except Exception as e:
     raise HTTPException(status_code=500, detail="Model loading error")
 
 # Define the data model
-class WeatherItem(BaseModel):
+class weatherItem(BaseModel):
     Humidity: float
     AirPressure: float
     Temperature: float
+    Year: int
+    Month: int
+    Day: int
+    hour: int
 
-temp_training_mean4 = 17.527442944444445
-temp_training_std4 = 8.223213560661346
 
-p_training_mean4 = 99.9095251111111
-p_training_std4 = 0.5779492889446739
+temp_training_mean4 =17.527442944444445
+temp_training_std4 =8.223213560661346
 
-h_training_mean4 = 8.482944805555556
-h_training_std4 = 34.169496459076676
+p_training_mean4=99.9095251111111
+p_training_std4=0.5779492889446739
+
+h_training_mean4=8.482944805555556
+h_training_std4=34.169496459076676
 
 def calculate_sin_cos(seconds):
     day = 60 * 60 * 24
@@ -81,6 +88,7 @@ def preprocess_input(humidity, airpressure, temperature, day_sin, day_cos, year_
         logger.error(f"Error in preprocessing: {e}")
         raise HTTPException(status_code=500, detail="Preprocessing error")
 
+
 def postprocess_temp(arr):
     return (arr * temp_training_std4) + temp_training_mean4
 
@@ -89,6 +97,11 @@ def postprocess_p(arr):
 
 def postprocess_h(arr):
     return (arr * h_training_std4) + h_training_mean4
+
+def calculate_seconds(year, month, day, hour):
+    ts = pd.Timestamp(year=year, month=month, day=day, hour=hour)
+    seconds = ts.timestamp()
+    return seconds
 
 def predict_3_days_after(model, humidity, airpressure, temperature, year, month, day, hour):
     predictions = []
@@ -115,6 +128,9 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
         if(abs(pred_humidity - humidity) > 12):
             pred_humidity = humidity * random.uniform(0.92, 1.06)    
 
+
+
+
         # Collect predictions
         predictions.append({
             'day': day + i + 1,
@@ -132,55 +148,26 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
 
     return predictions
 
-def fetch_data_from_thingspeak(channel_id, read_api_key):
-    try:
-        url = f"https://api.thingspeak.com/channels/{channel_id}/feeds.json?api_key={read_api_key}&results=2"
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
-        if 'feeds' not in data or not data['feeds']:
-            raise ValueError("No data available in ThingSpeak feed.")
-        
-        latest_feed = data['feeds'][0]
-        return {
-            'Humidity': float(latest_feed['field1']),
-            'AirPressure': float(latest_feed['field2']),
-            'Temperature': float(latest_feed['field3'])
-        }
-    except Exception as e:
-        logger.error(f"Error fetching data from ThingSpeak: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching data from ThingSpeak")
+
 
 @app.post("/predict/")
-async def predict():
+async def predict(item: weatherItem):
+    logger.info(f"Data has been received")
     try:
-        # Fetch data from ThingSpeak
-        data = fetch_data_from_thingspeak('2591669', 'PA4CZ1GSG29EZE3V')
-        
-        # Get current date and time
-        now = datetime.now()
-        year = now.year
-        month = now.month
-        day = now.day
-        hour = now.hour
-        
         predictions = predict_3_days_after(
-            loaded_model,
-            data['Humidity'],
-            data['AirPressure'],
-            data['Temperature'],
-            year,
-            month,
-            day,
-            hour
-        )
+        loaded_model,
+        item.Humidity,
+        item.AirPressure,
+        item.Temperature,
+        item.Year,
+        item.Month,
+        item.Day,
+        item.hour)
         
         formatted_predictions = [
-            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
-                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
-            ) for pred in predictions
-        ]
+        "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
+            pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
+        ) for pred in predictions]
         
         message = "\n".join(formatted_predictions)
         bot.send_message(chat_id=1390900484, text=message)
