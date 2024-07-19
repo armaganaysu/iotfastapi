@@ -15,7 +15,7 @@ import logging
 import requests
 from datetime import datetime
 
-API_TOKEN = 'your_telegram_api_token'
+API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
 bot = telebot.TeleBot(API_TOKEN)
 
 # Setup logging
@@ -183,7 +183,7 @@ async def predict():
         ]
         
         message = "\n".join(formatted_predictions)
-        bot.send_message(chat_id=your_chat_id, text=message)
+        bot.send_message(chat_id=1390900484, text=message)
         
         return {'predictions': formatted_predictions}
     except Exception as e:
