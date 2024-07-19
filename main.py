@@ -144,9 +144,9 @@ def fetch_data_from_thingspeak(channel_id, read_api_key):
         
         latest_feed = data['feeds'][0]
         return {
-            'Humidity': float(latest_feed['field1']),
-            'AirPressure': float(latest_feed['field2']),
-            'Temperature': float(latest_feed['field3'])
+            'Temperature': float(latest_feed['field1']),
+            'Humidity': float(latest_feed['field2']),
+            'AirPressure': float(latest_feed['field3'])
         }
     except Exception as e:
         logger.error(f"Error fetching data from ThingSpeak: {e}")
