@@ -14,8 +14,8 @@ from tensorflow.keras.models import model_from_json
 import pandas as pd
 import logging
 from decouple import config
-API_TOKEN = config(TELEGRAM_API)
-CHAT_ID = config(CHAT_ID)
+API_TOKEN = 7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE
+CHAT_ID = 1390900484
 bot = telebot.TeleBot(API_TOKEN)
 
 
