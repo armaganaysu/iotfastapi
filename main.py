@@ -134,7 +134,7 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
 
 def fetch_data_from_thingspeak(channel_id, read_api_key):
     try:
-        url = f"https://api.thingspeak.com/channels/{channel_id}/feeds.json?api_key={read_api_key}&results=1"
+        url = f"https://api.thingspeak.com/channels/{channel_id}/feeds.json?api_key={read_api_key}&results=2"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
