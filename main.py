@@ -14,7 +14,7 @@ from tensorflow.keras.models import model_from_json
 import pandas as pd
 import logging
 
-API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
+API_TOKEN = TELEGRAM_API
 bot = telebot.TeleBot(API_TOKEN)
 
 
@@ -167,8 +167,11 @@ async def predict(item: weatherItem):
         "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
             pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
         ) for pred in predictions]
-        
-        bot.send_message(chat_id=1390900484, text=formatted_predictions)
+
+        message = "\n".join(formatted_predictions[0])
+        message = "\n".join(formatted_predictions[1])
+        message = "\n".join(formatted_predictions[2])
+        bot.send_message(chat_id=CHAT_ID, text=message)
         
         return {'predictions': formatted_predictions}
     except Exception as e:
