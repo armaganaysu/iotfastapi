@@ -3,6 +3,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 import telebot
+import joblib
+
 
 import io
 import pickle
@@ -13,9 +15,8 @@ from pydantic import BaseModel
 from tensorflow.keras.models import model_from_json
 import pandas as pd
 import logging
-from decouple import config
-API_TOKEN = 7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE
-CHAT_ID = 1390900484
+
+API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
 bot = telebot.TeleBot(API_TOKEN)
 
 
@@ -168,11 +169,9 @@ async def predict(item: weatherItem):
         "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
             pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
         ) for pred in predictions]
-
-        message = "\n".join(formatted_predictions[0])
-        message = "\n".join(formatted_predictions[1])
-        message = "\n".join(formatted_predictions[2])
-        bot.send_message(chat_id=CHAT_ID, text=message)
+        
+        message = "\n".join(formatted_predictions)
+        bot.send_message(chat_id=1390900484, text=message)
         
         return {'predictions': formatted_predictions}
     except Exception as e:
