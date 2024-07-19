@@ -156,7 +156,7 @@ def fetch_data_from_thingspeak(channel_id, read_api_key):
 async def predict():
     try:
         # Fetch data from ThingSpeak
-        data = fetch_data_from_thingspeak('2588117', 'NTYAJ1JOVAAFNKTT')
+        data = fetch_data_from_thingspeak('2591669', 'PA4CZ1GSG29EZE3V')
         
         # Get current date and time
         now = datetime.now()
