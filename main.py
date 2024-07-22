@@ -197,7 +197,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def predict():
     try:
         # Fetch data from ThingSpeak
-        data = fetch_data_from_thingspeak():
+        data = fetch_data_from_thingspeak()
 
         predictions = predict_3_days_after(
             loaded_model,
