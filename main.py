@@ -198,23 +198,16 @@ async def predict():
     try:
         # Fetch data from ThingSpeak
         data = fetch_data_from_thingspeak():
-        
-        # Get current date and time
-        now = datetime.now()
-        year = now.year
-        month = now.month
-        day = now.day
-        hour = now.hour
-        
+
         predictions = predict_3_days_after(
             loaded_model,
             data['Humidity'],
             data['AirPressure'],
             data['Temperature'],
-            year,
-            month,
-            day,
-            hour
+            year['Year'],
+            month['Month'],
+            day['Day'],
+            hour['hour']
         )
         
         formatted_predictions = format_response(predictions)
