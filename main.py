@@ -20,8 +20,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 THINGSPEAK_API_KEY = 'PA4CZ1GSG29EZE3V'
 CHANNEL_ID = '2591669'
 
-TOKEN = '7095770713:AAHu02Ru6MGu6qTiddtaQ82ZsnU9LftUdvw'
-bot = telebot.TeleBot(API_TOKEN)
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
