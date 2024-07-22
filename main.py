@@ -14,8 +14,13 @@ import pandas as pd
 import logging
 import requests
 from datetime import datetime
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
+THINGSPEAK_API_KEY = 'PA4CZ1GSG29EZE3V'
+CHANNEL_ID = '2591669'
+
+TOKEN = '7095770713:AAHu02Ru6MGu6qTiddtaQ82ZsnU9LftUdvw'
 bot = telebot.TeleBot(API_TOKEN)
 
 # Setup logging
@@ -132,31 +137,67 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
 
     return predictions
 
-def fetch_data_from_thingspeak(channel_id, read_api_key):
+def fetch_data_from_thingspeak():
     try:
-        url = f"https://api.thingspeak.com/channels/{channel_id}/feeds.json?api_key={read_api_key}&results=1"
+        url = f'https://api.thingspeak.com/channels/{CHANNEL_ID}/feeds.json?api_key={THINGSPEAK_API_KEY}&results=1'
         response = requests.get(url)
-        response.raise_for_status()
+        response.raise_for_status()  # Raise an error for bad status codes
         data = response.json()
-        
-        if 'feeds' not in data or not data['feeds']:
-            raise ValueError("No data available in ThingSpeak feed.")
-        
-        latest_feed = data['feeds'][0]
+        logger.info(f"Data fetched: {data}")
+
+        latest_entry = data['feeds'][0]
         return {
-            'Temperature': float(latest_feed['field1']),
-            'Humidity': float(latest_feed['field2']),
-            'AirPressure': float(latest_feed['field3'])
+            "Humidity": float(latest_entry['field1']) if latest_entry['field1'] is not None else 0.0,
+            "AirPressure": float(latest_entry['field2']) if latest_entry['field2'] is not None else 0.0,
+            "Temperature": float(latest_entry['field3']) if latest_entry['field3'] is not None else 0.0,
+            "Year": int(latest_entry['created_at'][:4]),
+            "Month": int(latest_entry['created_at'][5:7]),
+            "Day": int(latest_entry['created_at'][8:10]),
+            "hour": int(latest_entry['created_at'][11:13])
         }
     except Exception as e:
         logger.error(f"Error fetching data from ThingSpeak: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching data from ThingSpeak")
+        return None
+
+
+def format_response(response):
+    if "error" in response:
+        return "An error occurred: " + response["error"]
+
+    formatted_message = "Prediction Results:\n"
+    for prediction in response['predictions']:
+        day, humidity, air_pressure, temperature = prediction.split(", ")
+        formatted_message += (
+            f"{day}\n"
+            f"  Predicted Humidity: {humidity.split(': ')[1]}\n"
+            f"  Predicted Air Pressure: {air_pressure.split(': ')[1]}\n"
+            f"  Predicted Temperature: {temperature.split(': ')[1]}\n"
+        )
+    return formatted_message
+
+async def forecast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        logger.info("Handling /forecast command...")
+        data = fetch_data_from_thingspeak()
+        if not data:
+            await update.message.reply_text("Failed to fetch data from ThingSpeak.")
+            return
+
+        response = send_post_request(data)
+        formatted_message = format_response(response)
+        await update.message.reply_text(formatted_message)
+    except Exception as e:
+        logger.error(f"Error in forecast: {e}")
+        await update.message.reply_text("An error occurred while processing your request.")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Hello! Use /forecast to send a request.")
 
 @app.post("/predict/")
 async def predict():
     try:
         # Fetch data from ThingSpeak
-        data = fetch_data_from_thingspeak('2588117', 'NTYAJ1JOVAAFNKTT')
+        data = fetch_data_from_thingspeak():
         
         # Get current date and time
         now = datetime.now()
@@ -176,16 +217,23 @@ async def predict():
             hour
         )
         
-        formatted_predictions = [
-            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
-                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
-            ) for pred in predictions
-        ]
-        
-        message = "\n".join(formatted_predictions)
-        bot.send_message(chat_id=1390900484, text=message)
-        
-        return {'predictions': formatted_predictions}
+        formatted_predictions = format_response(predictions)
+        await update.message.reply_text(formatted_message)
+
     except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction error {e}")
+        logger.error(f"Error in forecast: {e}")
+        await update.message.reply_text("An error occurred while processing your request.")
+
+def main():
+    # Create the Application and pass it your bot's token.
+    application = Application.builder().token(TOKEN).build()
+
+    # on different commands - answer in Telegram
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("forecast", forecast))
+
+    # Start the Bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
