@@ -9,3 +9,4 @@ pyTelegramBotAPI
 python-telegram-bot
 python-decouple
 requests==2.28
+logging
