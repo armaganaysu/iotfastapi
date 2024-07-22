@@ -14,13 +14,9 @@ import pandas as pd
 import logging
 import requests
 from datetime import datetime
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 
-THINGSPEAK_API_KEY = 'PA4CZ1GSG29EZE3V'
-CHANNEL_ID = '2591669'
-
-
+API_TOKEN = '7183388741:AAF0ZKF_q6aSZbXQqcqkTfMStBCOu-HJQQE'
+bot = telebot.TeleBot(API_TOKEN)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -158,7 +154,6 @@ def fetch_data_from_thingspeak():
         logger.error(f"Error fetching data from ThingSpeak: {e}")
         return None
 
-
 def format_response(response):
     if "error" in response:
         return "An error occurred: " + response["error"]
@@ -174,30 +169,12 @@ def format_response(response):
         )
     return formatted_message
 
-async def forecast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        logger.info("Handling /forecast command...")
-        data = fetch_data_from_thingspeak()
-        if not data:
-            await update.message.reply_text("Failed to fetch data from ThingSpeak.")
-            return
-
-        response = send_post_request(data)
-        formatted_message = format_response(response)
-        await update.message.reply_text(formatted_message)
-    except Exception as e:
-        logger.error(f"Error in forecast: {e}")
-        await update.message.reply_text("An error occurred while processing your request.")
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Hello! Use /forecast to send a request.")
-
 @app.post("/predict/")
 async def predict():
     try:
         # Fetch data from ThingSpeak
-        data = fetch_data_from_thingspeak()
-
+        data = fetch_data_from_thingspeak('2591669', 'PA4CZ1GSG29EZE3V')
+        
         predictions = predict_3_days_after(
             loaded_model,
             data['Humidity'],
@@ -210,22 +187,11 @@ async def predict():
         )
         
         formatted_predictions = format_response(predictions)
-        await update.message.reply_text(formatted_message)
-
+        
+        message = "\n".join(formatted_predictions)
+        bot.send_message(chat_id=1390900484, text=message)
+        
+        return {'predictions': formatted_predictions}
     except Exception as e:
-        logger.error(f"Error in forecast: {e}")
-        await update.message.reply_text("An error occurred while processing your request.")
-
-def main():
-    # Create the Application and pass it your bot's token.
-    application = Application.builder().token(TOKEN).build()
-
-    # on different commands - answer in Telegram
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("forecast", forecast))
-
-    # Start the Bot
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
+        logger.error(f"Prediction error: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction error {e}")
