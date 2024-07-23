@@ -90,6 +90,10 @@ def postprocess_p(arr):
 def postprocess_h(arr):
     return (arr * h_training_std4) + h_training_mean4
 
+def consistent_random(seed, lower, upper):
+    random.seed(seed)
+    return random.uniform(lower, upper)
+
 def predict_3_days_after(model, humidity, airpressure, temperature, year, month, day, hour):
     predictions = []
     base_seconds = calculate_seconds(year, month, day, hour)
@@ -108,12 +112,17 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
         pred_airpressure = postprocess_p(pred[0][1])
         pred_humidity = postprocess_h(pred[0][2])
 
-        if(abs(pred_temperature - temperature) > 6):
-            pred_temperature = temperature * random.uniform(0.92, 1.06)
-        if(abs(pred_airpressure - airpressure) > 5):
-            pred_airpressure = airpressure * random.uniform(0.92, 1.06)       
-        if(abs(pred_humidity - humidity) > 12):
-            pred_humidity = humidity * random.uniform(0.92, 1.06)    
+        temp_seed = hash((temperature, airpressure, humidity))
+        airp_seed = hash((airpressure, temperature, humidity))
+        humid_seed = hash((humidity, airpressure, temperature))
+
+        # Apply the correction with consistent randomness
+        if abs(pred_temperature - temperature) > 6:
+            pred_temperature = temperature * consistent_random(temp_seed, 0.92, 1.06)
+        if abs(pred_airpressure - airpressure) > 5:
+            pred_airpressure = airpressure * consistent_random(airp_seed, 0.92, 1.06)
+        if abs(pred_humidity - humidity) > 12:
+            pred_humidity = humidity * consistent_random(humid_seed, 0.92, 1.06)   
 
         # Collect predictions
         predictions.append({
