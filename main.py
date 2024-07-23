@@ -132,61 +132,55 @@ def predict_3_days_after(model, humidity, airpressure, temperature, year, month,
 
     return predictions
 
-def fetch_data_from_thingspeak():
+def fetch_data_from_thingspeak(channel_id, read_api_key):
     try:
-        url = f'https://api.thingspeak.com/channels/{CHANNEL_ID}/feeds.json?api_key={THINGSPEAK_API_KEY}&results=1'
+        url = f"https://api.thingspeak.com/channels/2588117/feeds/last.json"
         response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad status codes
+        response.raise_for_status()
         data = response.json()
-        logger.info(f"Data fetched: {data}")
-
-        latest_entry = data['feeds'][0]
+        
+        if 'feeds' not in data or not data['feeds']:
+            raise ValueError("No data available in ThingSpeak feed.")
+        
+        latest_feed = data['feeds'][0]
         return {
-            "Humidity": float(latest_entry['field1']) if latest_entry['field1'] is not None else 0.0,
-            "AirPressure": float(latest_entry['field2']) if latest_entry['field2'] is not None else 0.0,
-            "Temperature": float(latest_entry['field3']) if latest_entry['field3'] is not None else 0.0,
-            "Year": int(latest_entry['created_at'][:4]),
-            "Month": int(latest_entry['created_at'][5:7]),
-            "Day": int(latest_entry['created_at'][8:10]),
-            "hour": int(latest_entry['created_at'][11:13])
+            'Temperature': float(latest_feed['field1']),
+            'Humidity': float(latest_feed['field2']),
+            'AirPressure': float(latest_feed['field3'])
         }
     except Exception as e:
         logger.error(f"Error fetching data from ThingSpeak: {e}")
-        return None
-
-def format_response(response):
-    if "error" in response:
-        return "An error occurred: " + response["error"]
-
-    formatted_message = "Prediction Results:\n"
-    for prediction in response['predictions']:
-        day, humidity, air_pressure, temperature = prediction.split(", ")
-        formatted_message += (
-            f"{day}\n"
-            f"  Predicted Humidity: {humidity.split(': ')[1]}\n"
-            f"  Predicted Air Pressure: {air_pressure.split(': ')[1]}\n"
-            f"  Predicted Temperature: {temperature.split(': ')[1]}\n"
-        )
-    return formatted_message
+        raise HTTPException(status_code=500, detail="Error fetching data from ThingSpeak")
 
 @app.post("/predict/")
 async def predict():
     try:
         # Fetch data from ThingSpeak
-        data = fetch_data_from_thingspeak('2591669', 'PA4CZ1GSG29EZE3V')
+        data = fetch_data_from_thingspeak('2588117', 'NTYAJ1JOVAAFNKTT')
+        
+        # Get current date and time
+        now = datetime.now()
+        year = now.year
+        month = now.month
+        day = now.day
+        hour = now.hour
         
         predictions = predict_3_days_after(
             loaded_model,
             data['Humidity'],
             data['AirPressure'],
             data['Temperature'],
-            year['Year'],
-            month['Month'],
-            day['Day'],
-            hour['hour']
+            year,
+            month,
+            day,
+            hour
         )
         
-        formatted_predictions = format_response(predictions)
+        formatted_predictions = [
+            "Day: {}, Predicted Humidity: {:.2f}%, Predicted Air Pressure: {:.5f}, Predicted Temperature: {:.5f}".format(
+                pred['day'], pred['predicted_humidity'], pred['predicted_airpressure'], pred['predicted_temperature']
+            ) for pred in predictions
+        ]
         
         message = "\n".join(formatted_predictions)
         bot.send_message(chat_id=1390900484, text=message)
